@@ -6,57 +6,159 @@
  * so that the actual '@actions/core' module is not imported.
  */
 import { jest } from '@jest/globals'
+
 import * as core from '../__fixtures__/core.js'
-import { wait } from '../__fixtures__/wait.js'
+import { setupServer } from 'msw/node'
+
+import { dnsRecord, subdomain, zone } from './mocks/const'
+import { getFound, getNotFound } from './mocks/handlers/get'
+import { deleteOK } from './mocks/handlers/delete'
+import { updateOK } from './mocks/handlers/update'
+import { createOK } from './mocks/handlers/create'
 
 // Mocks should be declared before the module being tested is imported.
 jest.unstable_mockModule('@actions/core', () => core)
-jest.unstable_mockModule('../src/wait.js', () => ({ wait }))
 
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
 const { run } = await import('../src/main.js')
 
 describe('main.ts', () => {
-  beforeEach(() => {
-    // Set the action's inputs as return values from core.getInput().
-    core.getInput.mockImplementation(() => '500')
+  let server: ReturnType<typeof setupServer>
 
-    // Mock the wait function so that it does not actually wait.
-    wait.mockImplementation(() => Promise.resolve('done!'))
+  beforeAll(() => {
+    server = setupServer()
+  })
+
+  beforeEach(() => {
+    server.listen({ onUnhandledRequest: 'error' })
   })
 
   afterEach(() => {
+    server.resetHandlers()
+  })
+
+  afterAll(() => {
+    server.close()
     jest.resetAllMocks()
   })
 
-  it('Sets the time output', async () => {
+  it('delete the record', async () => {
+    // Set the action's inputs as return values from core.getInput()
+    core.getInput.mockImplementation((name) => {
+      switch (name) {
+        case 'api-key':
+          return 'apiKey'
+        case 'zone':
+          return zone
+        case 'subdomain':
+          return subdomain
+        default:
+          return ''
+      }
+    })
+    core.getBooleanInput.mockImplementation((name) => {
+      switch (name) {
+        case 'present':
+          return false
+        default:
+          return false
+      }
+    })
+
+    server.use(getFound, deleteOK)
+
     await run()
 
-    // Verify the time output was set.
-    expect(core.setOutput).toHaveBeenNthCalledWith(
-      1,
-      'time',
-      // Simple regex to match a time string in the format HH:MM:SS.
-      expect.stringMatching(/^\d{2}:\d{2}:\d{2}/)
-    )
+    // Verify that all of the core library functions were called correctly
+    expect(core.setOutput).not.toHaveBeenCalled()
+    expect(core.error).not.toHaveBeenCalled()
   })
 
-  it('Sets a failed status', async () => {
-    // Clear the getInput mock and return an invalid value.
-    core.getInput.mockClear().mockReturnValueOnce('this is not a number')
+  it('update the record', async () => {
+    // Set the action's inputs as return values from core.getInput()
+    core.getInput.mockImplementation((name) => {
+      switch (name) {
+        case 'api-key':
+          return 'apiKey'
+        case 'zone':
+          return zone
+        case 'subdomain':
+          return subdomain
+        case 'target':
+          return dnsRecord.resource_records[0].content[0]
+        default:
+          return ''
+      }
+    })
+    core.getBooleanInput.mockImplementation((name) => {
+      switch (name) {
+        case 'present':
+          return true
+        default:
+          return false
+      }
+    })
 
-    // Clear the wait mock and return a rejected promise.
-    wait
-      .mockClear()
-      .mockRejectedValueOnce(new Error('milliseconds is not a number'))
+    server.use(getFound, updateOK)
 
     await run()
 
-    // Verify that the action was marked as failed.
-    expect(core.setFailed).toHaveBeenNthCalledWith(
+    // Verify that all of the core library functions were called correctly
+    expect(core.setOutput).toHaveBeenNthCalledWith(
       1,
-      'milliseconds is not a number'
+      'record',
+      JSON.stringify(dnsRecord)
     )
+    expect(core.error).not.toHaveBeenCalled()
+  })
+
+  it('create the record', async () => {
+    // Set the action's inputs as return values from core.getInput()
+    core.getInput.mockImplementation((name) => {
+      switch (name) {
+        case 'api-key':
+          return 'apiKey'
+        case 'zone':
+          return zone
+        case 'subdomain':
+          return subdomain
+        case 'target':
+          return dnsRecord.resource_records[0].content[0]
+        default:
+          return ''
+      }
+    })
+    core.getBooleanInput.mockImplementation((name) => {
+      switch (name) {
+        case 'present':
+          return true
+        default:
+          return false
+      }
+    })
+
+    server.use(getNotFound, createOK)
+
+    await run()
+
+    // Verify that all of the core library functions were called correctly
+    expect(core.setOutput).toHaveBeenNthCalledWith(
+      1,
+      'record',
+      JSON.stringify(dnsRecord)
+    )
+    expect(core.error).not.toHaveBeenCalled()
+  })
+
+  it('sets a failed status', async () => {
+    // Set the action's inputs as return values from core.getInput()
+    core.getInput.mockImplementation(() => '') // No inputs
+    core.getBooleanInput.mockImplementation(() => false)
+
+    await run()
+
+    // Verify that all of the core library functions were called correctly
+    expect(core.setFailed).toHaveBeenCalled()
   })
 })

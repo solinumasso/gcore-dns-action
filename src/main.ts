@@ -1,5 +1,11 @@
 import * as core from '@actions/core'
-import { wait } from './wait.js'
+
+import {
+  defaultFieldType,
+  defaultTTL,
+  DNSFieldType,
+  GcoreClient
+} from './gcore'
 
 /**
  * The main function for the action.
@@ -8,20 +14,56 @@ import { wait } from './wait.js'
  */
 export async function run(): Promise<void> {
   try {
-    const ms: string = core.getInput('milliseconds')
+    // Gcore client inputs
+    const apiKey: string = core.getInput('api-key', {
+      required: true
+    })
+    if (!apiKey?.length) {
+      core.setFailed('Gcore API key is required')
+      return
+    }
+    core.setSecret(apiKey)
 
-    // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
-    core.debug(`Waiting ${ms} milliseconds ...`)
+    const zone: string = core.getInput('zone', { required: true })
+    if (!zone?.length) {
+      core.setFailed('zone is required')
+      return
+    }
+    const subdomain: string = core.getInput('subdomain', { required: true })
+    if (!subdomain?.length) {
+      core.setFailed('subdomain is required')
+      return
+    }
+    const present: boolean = core.getBooleanInput('present', { required: true })
 
-    // Log the current timestamp, wait, then log the new timestamp
-    core.debug(new Date().toTimeString())
-    await wait(parseInt(ms, 10))
-    core.debug(new Date().toTimeString())
+    // Create an Gcore client
+    const client = new GcoreClient(apiKey, zone)
 
-    // Set outputs for other workflow steps to use
-    core.setOutput('time', new Date().toTimeString())
+    const rawFieldType: string = core.getInput('type')
+    const fieldType: DNSFieldType = rawFieldType.length
+      ? (rawFieldType as DNSFieldType)
+      : defaultFieldType
+
+    if (present) {
+      const target: string = core.getInput('target', { required: true })
+      const rawTtl: string = core.getInput('ttl')
+      const ttl = rawTtl.length ? parseInt(rawTtl, 10) : defaultTTL
+      const record = await client.upsertSubdomainRecord(
+        subdomain,
+        target,
+        fieldType,
+        ttl
+      )
+
+      // Set outputs for other workflow steps to use
+      core.setOutput('record', JSON.stringify(record))
+    } else {
+      await client.deleteSubdomainRecord(subdomain, fieldType)
+    }
   } catch (error) {
     // Fail the workflow run if an error occurs
-    if (error instanceof Error) core.setFailed(error.message)
+    if (error instanceof Error) {
+      core.setFailed(error.message)
+    }
   }
 }
