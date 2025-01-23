@@ -3,6 +3,7 @@
   "description": "An action to control Gcore DNS entries",
   "version": "1.0.0",
   "author": "Solinum dev team <tech@solinum.org>",
+  "type": "module",
   "private": false,
   "homepage": "https://github.com/solinumasso/gcore-dns-action",
   "repository": {
@@ -22,7 +23,7 @@
     ".": "./dist/index.js"
   },
   "engines": {
-    "node": ">=21"
+    "node": ">=20"
   },
   "scripts": {
     "bundle": "npm run format:write && npm run package",
@@ -50,7 +51,7 @@
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-typescript": "^12.1.1",
     "@types/jest": "^29.5.14",
-    "@types/node": "^22.10.7",
+    "@types/node": "^20.17.4",
     "@typescript-eslint/eslint-plugin": "^8.21.0",
     "@typescript-eslint/parser": "^8.21.0",
     "eslint": "^9.18.0",

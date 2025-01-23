@@ -5,7 +5,7 @@ import {
   defaultTTL,
   DNSFieldType,
   GcoreClient
-} from './gcore'
+} from './gcore.js'
 
 /**
  * The main function for the action.
